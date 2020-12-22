@@ -1,0 +1,40 @@
+{
+  "name": "@twoquarterrican/expand",
+  "version": "0.0.1",
+  "description": "Recursively expand values",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://gitbug.com/twoquarterrican/expand"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint ./src --max-warnings 0 --ext .tsx,.ts,.js && prettier --check src",
+    "prettier": "prettier --write src",
+    "compile": "tsc -p tsconfig.json"
+  },
+  "keywords": [
+    "expand",
+    "configuration"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/twoquarterrican/expand#readme",
+  "bugs": {
+    "url": "https://github.com/twoquarterrican/expand/issues"
+  },
+  "devDependencies": {
+    "@types/node": "^14.14.14",
+    "prettier": "^2.2.1",
+    "typescript": "^4.1.3"
+  },
+  "prettier": {
+    "arrowParens": "always",
+    "endOfLine": "auto",
+    "jsxSingleQuote": true,
+    "printWidth": 80,
+    "semi": true,
+    "singleQuote": true,
+    "tabWidth": 2,
+    "trailingComma": "all"
+  }
+}
