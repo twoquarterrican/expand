@@ -2,16 +2,28 @@
   "name": "@twoquarterrican/expand",
   "version": "0.0.1",
   "description": "Recursively expand values",
-  "main": "index.js",
+  "main": "lib/index.js",
+  "module": "lib/index.es5.js",
+  "types": "lib/index.d.ts",
+  "author": "twoquarterrican",
   "repository": {
     "type": "git",
     "url": "git+https://gitbug.com/twoquarterrican/expand"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "eslint ./src --max-warnings 0 --ext .tsx,.ts,.js && prettier --check src",
     "prettier": "prettier --write src",
-    "compile": "tsc -p tsconfig.json"
+    "build": "npm run lint && npm run test && npm run compile",
+    "clean": "rimraf lib/",
+    "compile": "npm run clean && tsc",
+    "generate-doctests": "tsdoc-testify --fileMatch src/*.ts && ts-doctest . src",
+    "rimraf": "./node_modules/rimraf/bin.js",
+    "test": "jest --coverage",
+    "prepare": "npm run compile",
+    "prepublishOnly": "npm test && npm run lint",
+    "preversion": "npm run lint",
+    "version": "git add -A src",
+    "postversion": "git push && git push --tags"
   },
   "keywords": [
     "expand",
@@ -23,8 +35,11 @@
     "url": "https://github.com/twoquarterrican/expand/issues"
   },
   "devDependencies": {
+    "@types/jest": "^26.0.19",
     "@types/node": "^14.14.14",
+    "jest": "^26.6.3",
     "prettier": "^2.2.1",
+    "ts-jest": "^26.4.4",
     "typescript": "^4.1.3"
   },
   "prettier": {
@@ -36,5 +51,8 @@
     "singleQuote": true,
     "tabWidth": 2,
     "trailingComma": "all"
+  },
+  "dependencies": {
+    "recursive-reducer": "0.0.5"
   }
 }

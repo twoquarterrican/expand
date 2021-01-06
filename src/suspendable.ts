@@ -1,31 +1,38 @@
 export type IMaybeSuspended<T> = ISuspended<T> | T;
 
 export interface ISuspended<T> {
-  advance: (evaluationContext: any) => Promise<IMaybeSuspended<T>>;
+  advance: (evaluationContext: any) => IMaybeSuspended<T>;
+  identifier: string;
+  dependencies: string[];
 }
 
-export class Suspended<T> implements ISuspended<T> {
-  advance: (evaluationContext: any) => Promise<IMaybeSuspended<T>>;
-  toStringValue: string;
-
+class Suspended<T> implements ISuspended<T> {
   constructor(
-    advance: (evaluationContext: any) => Promise<IMaybeSuspended<T>>,
-    toStringValue: string,
-  ) {
-    this.advance = advance;
-    this.toStringValue = toStringValue;
-  }
+    public identifier: string,
+    public advance: (evaluationContext: any) => IMaybeSuspended<T>,
+    public dependencies: string[] = [],
+  ) {}
 
   public toString() {
-    return `Suspended(${this.toStringValue})`;
+    return `Suspended(${this.identifier})`;
   }
 }
 
+export const suspend = <T>(
+  identifier: string,
+  advance: (evaluationContext: any) => IMaybeSuspended<T>,
+  dependencies: string[] = [],
+) => new Suspended(identifier, advance, dependencies);
+
 export const isSuspended = <T>(o: any): o is ISuspended<T> =>
-  o !== null && o !== undefined && typeof o.advance === 'function';
+  o !== null &&
+  o !== undefined &&
+  typeof o.advance === 'function' &&
+  typeof o.identifier === 'string' &&
+  Array.isArray(o.dependencies);
 
 export const complete = <T>(value: T): ISuspended<T> => {
-  return new Suspended(() => Promise.resolve(value), `Completed(${value})`);
+  return new Suspended(`Completed(${value})`, () => value);
 };
 
 const simplifyArr = <T>(maybeSuspendeds: IMaybeSuspended<T>[]): T[] | null => {
@@ -48,19 +55,24 @@ export const combine = <T, S>(
   if (values !== null) {
     return valueCombiner(values);
   } else {
-    return new Suspended(
-      async (...args) =>
+    const allDependencies = [];
+    for (let maybeSuspendedElement of maybeSuspended) {
+      if (isSuspended(maybeSuspendedElement)) {
+        allDependencies.push(...maybeSuspendedElement.dependencies);
+      }
+    }
+    return suspend(
+      `Combined(${maybeSuspended.join(', ')})`,
+      (...args) =>
         combine(
-          await Promise.all(
-            maybeSuspended.map(async (maybeSuspended) =>
-              isSuspended(maybeSuspended)
-                ? await maybeSuspended.advance(...args)
-                : maybeSuspended,
-            ),
+          maybeSuspended.map((maybeSuspended) =>
+            isSuspended(maybeSuspended)
+              ? maybeSuspended.advance(...args)
+              : maybeSuspended,
           ),
           valueCombiner,
         ),
-      `Combined(${maybeSuspended.join(', ')})`,
+      allDependencies,
     );
   }
 };

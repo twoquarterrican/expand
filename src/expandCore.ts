@@ -1,25 +1,35 @@
 import util from 'util';
 import {
-  recursiveValueCopier,
-  IContext,
-  IVisitResult,
-  TVisitor,
-} from './visitors';
-import { combine, complete, IMaybeSuspended, isSuspended } from './suspendable';
+  combine,
+  complete,
+  IMaybeSuspended,
+  isSuspended,
+  suspend,
+} from './suspendable';
+import {
+  empty,
+  IRecordLookupResult,
+  Optional,
+  present,
+  recordLookup,
+  recursiveMapper,
+  recursiveMapperReducer,
+  TPath,
+  TPathFn,
+} from 'recursive-reducer';
+import { checkForCycles, TDependenciesOf } from './dependencies';
 
 const debuglog = util.debuglog('expand');
 const error = console.error;
 
 export const regexStringVisitor = <T extends any>(
   regex: RegExp,
-  onMatchAsyncFn: (
-    context: IContext,
-    match: RegExpExecArray,
-  ) => Promise<IMaybeSuspended<T>>,
-) => async (
-  context: IContext,
-  s: string,
-): Promise<IVisitResult<IMaybeSuspended<string | T>>> => {
+  onMatch: (match: RegExpExecArray) => IMaybeSuspended<T>,
+): TPathFn<any, Optional<IMaybeSuspended<string | T>>> => (s: any) => {
+  if (typeof s !== 'string') {
+    return empty();
+  }
+
   let previousLastIndex = 0;
   const pieces: IMaybeSuspended<string | T>[] = [];
   regex.lastIndex = 0;
@@ -38,31 +48,27 @@ export const regexStringVisitor = <T extends any>(
     }
     const sub = s.substr(previousLastIndex, match.index - previousLastIndex);
     if (sub) pieces.push(complete(sub));
-    pieces.push(await onMatchAsyncFn(context, match));
+    pieces.push(onMatch(match));
     previousLastIndex = regex.lastIndex;
   }
   if (pieces.length === 0) {
-    return { isPresent: false };
-  }
-  if (pieces.length === 1) {
+    return empty();
+  } else if (pieces.length === 1) {
     // only one piece: string in config may be replaced with obj or other type
-    return { isPresent: true, value: pieces[0] };
+    return present(pieces[0]);
   } else {
     // multiple pieces: string in config must be replaced
     // with string after all suspendable functions are done
-    return {
-      isPresent: true,
-      value: combine(pieces, (values) => values.join('')),
-    };
+    return present(combine(pieces, (values) => values.join('')));
   }
 };
 
-const advance = async (config: any) => {
-  await recursiveValueCopier(async (_context: IContext, value: any) => {
+const advance = (config: any) =>
+  recursiveMapper(() => (value: any) => {
     if (!isSuspended(value)) {
       return { isPresent: false };
     } else {
-      const advanced = await value.advance(config);
+      const advanced = value.advance(config);
       if (!isSuspended(advanced)) {
         debuglog(
           'resolved',
@@ -74,28 +80,33 @@ const advance = async (config: any) => {
       return { isPresent: true, value: advanced };
     }
   })(config);
-};
 
-const anySuspended = async (config: any) => {
-  let anySuspended = false;
-  await recursiveValueCopier(async (_context: IContext, value: any) => {
-    if (isSuspended(value)) {
-      anySuspended = true;
-      return { isPresent: true, value: value };
-    } else {
-      return { isPresent: false };
+const dependenciesOf: (config: any) => TDependenciesOf = recursiveMapperReducer(
+  () => ({}), // only invoked on non-suspended values
+  (prev: TDependenciesOf, current: TDependenciesOf) => {
+    for (let identifier of Object.keys({ ...prev, ...current })) {
+      const dependenciesArr: string[] = prev[identifier] || [];
+      dependenciesArr.push(...(current[identifier] || []));
+      prev[identifier] = dependenciesArr;
     }
-  })(config);
-  return anySuspended;
-};
+    return prev;
+  },
+  () => ({}),
+  (value: any) =>
+    isSuspended(value)
+      ? present({ [value.identifier]: value.dependencies })
+      : empty(),
+);
 
-const advanceRepeatedly = async (start: any): Promise<any> => {
+const advanceRepeatedly = (start: any): any => {
   let next = start;
   for (let i = 0; i < 100; i++) {
-    if (await anySuspended(next)) {
-      next = await advance(next);
-    } else {
+    const dependencies = dependenciesOf(next);
+    if (Object.keys(dependencies).length === 0) {
       return next;
+    } else {
+      checkForCycles(dependencies);
+      next = advance(next);
     }
   }
   error('[ERROR] expanded:', util.inspect(next, false, null, true));
@@ -104,10 +115,53 @@ const advanceRepeatedly = async (start: any): Promise<any> => {
   );
 };
 
-export const expander = async <T>(visitors: TVisitor<IVisitResult<T>>) => {
-  const initialExpander = recursiveValueCopier(visitors);
-  return async (baseConfig: any) => {
-    let expanded = await initialExpander(baseConfig);
-    return await advanceRepeatedly(expanded);
+export const DOLLAR_SIGN_BRACKET_REFERENCE = regexStringVisitor(
+  /\${([^}]+)}/g,
+  (match: RegExpExecArray) => {
+    if (match[1] === undefined || match[0] === undefined) {
+      throw new Error('Regex must have a value at group 1. Result is ' + match);
+    }
+    const recordLookupFn = recordLookup(match[1].split('.'));
+    return suspendedRecordLookupFn(recordLookupFn, match[0], []);
+  },
+);
+
+const suspendedRecordLookupFn = (
+  recordLookupFn: (a: any) => IRecordLookupResult,
+  suspendedFnStringValue: string,
+  dependencies: string[],
+): IMaybeSuspended<any> =>
+  suspend(
+    suspendedFnStringValue,
+    (evaluationContext) => {
+      const { resolvedPath, unresolvedPath, value, values } = recordLookupFn(
+        evaluationContext,
+      );
+
+      const dependedOn = [...values, value].find((val: any): boolean =>
+        isSuspended(val),
+      );
+      if (dependedOn !== undefined) {
+        return suspendedRecordLookupFn(recordLookupFn, suspendedFnStringValue, [
+          ...dependencies,
+          dependedOn.identifier,
+        ]);
+      } else if (unresolvedPath.length === 0) {
+        return value;
+      } else
+        throw new Error(
+          `Expression ${suspendedFnStringValue} evaluated with unresolved path [${unresolvedPath}], resolved path [${resolvedPath}], and value: ${value}`,
+        );
+    },
+    dependencies,
+  );
+
+export const expander = <T>(
+  mapper: (a: any, path: TPath) => Optional<IMaybeSuspended<T>>,
+) => {
+  const initialExpander = recursiveMapper(() => mapper);
+  return (baseConfig: any) => {
+    let expanded = initialExpander(baseConfig);
+    return advanceRepeatedly(expanded);
   };
 };
