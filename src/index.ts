@@ -1,3 +1,6 @@
-import { expander, regexStringVisitor } from './expandCore';
-
-export { expander, regexStringVisitor };
+export {
+  basicRecordLookupFnFactory,
+  DOLLAR_SIGN_BRACKET_REFERENCE,
+  expander,
+  regexStringVisitor,
+} from './expandCore';

@@ -1,7 +1,13 @@
-import { DOLLAR_SIGN_BRACKET_REFERENCE, expander } from './expandCore';
+import {
+  basicRecordLookupFnFactory,
+  DOLLAR_SIGN_BRACKET_REFERENCE,
+  expander,
+} from './expandCore';
 import * as util from 'util';
 
-const dollarSignBracketExpander = expander(DOLLAR_SIGN_BRACKET_REFERENCE);
+const dollarSignBracketExpander = expander(
+  DOLLAR_SIGN_BRACKET_REFERENCE(basicRecordLookupFnFactory),
+);
 
 test('chains of dependencies in dollar sign bracket references', async () => {
   expect(

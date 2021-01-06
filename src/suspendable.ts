@@ -1,43 +1,33 @@
-export type IMaybeSuspended<T> = ISuspended<T> | T;
-
-export interface ISuspended<T> {
-  advance: (evaluationContext: any) => IMaybeSuspended<T>;
-  identifier: string;
-  dependencies: string[];
-}
-
-class Suspended<T> implements ISuspended<T> {
+export class Suspended<T> {
   constructor(
     public identifier: string,
-    public advance: (evaluationContext: any) => IMaybeSuspended<T>,
+    public advance: (evaluationContext: unknown) => IMaybeSuspended<T>,
     public dependencies: string[] = [],
   ) {}
 
-  public toString() {
+  public toString(): string {
     return `Suspended(${this.identifier})`;
   }
 }
 
+export type IMaybeSuspended<T> = Suspended<T> | T;
+
 export const suspend = <T>(
   identifier: string,
-  advance: (evaluationContext: any) => IMaybeSuspended<T>,
+  advance: (evaluationContext: unknown) => IMaybeSuspended<T>,
   dependencies: string[] = [],
-) => new Suspended(identifier, advance, dependencies);
+): Suspended<T> => new Suspended(identifier, advance, dependencies);
 
-export const isSuspended = <T>(o: any): o is ISuspended<T> =>
-  o !== null &&
-  o !== undefined &&
-  typeof o.advance === 'function' &&
-  typeof o.identifier === 'string' &&
-  Array.isArray(o.dependencies);
+export const isSuspended = <T>(o: unknown): o is Suspended<T> =>
+  o instanceof Suspended;
 
-export const complete = <T>(value: T): ISuspended<T> => {
+export const complete = <T>(value: T): Suspended<T> => {
   return new Suspended(`Completed(${value})`, () => value);
 };
 
 const simplifyArr = <T>(maybeSuspendeds: IMaybeSuspended<T>[]): T[] | null => {
   const values: T[] = [];
-  for (let maybeSuspended of maybeSuspendeds) {
+  for (const maybeSuspended of maybeSuspendeds) {
     if (isSuspended(maybeSuspended)) {
       return null;
     } else {
@@ -56,7 +46,7 @@ export const combine = <T, S>(
     return valueCombiner(values);
   } else {
     const allDependencies = [];
-    for (let maybeSuspendedElement of maybeSuspended) {
+    for (const maybeSuspendedElement of maybeSuspended) {
       if (isSuspended(maybeSuspendedElement)) {
         allDependencies.push(...maybeSuspendedElement.dependencies);
       }

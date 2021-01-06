@@ -22,10 +22,13 @@ import { checkForCycles, TDependenciesOf } from './dependencies';
 const debuglog = util.debuglog('expand');
 const error = console.error;
 
-export const regexStringVisitor = <T extends any>(
+export const regexStringVisitor = <T>(
   regex: RegExp,
-  onMatch: (match: RegExpExecArray) => IMaybeSuspended<T>,
-): TPathFn<any, Optional<IMaybeSuspended<string | T>>> => (s: any) => {
+  onMatch: (match: RegExpExecArray, path: TPath) => IMaybeSuspended<T>,
+): TPathFn<unknown, Optional<IMaybeSuspended<string | T>>> => (
+  s: unknown,
+  path: TPath,
+) => {
   if (typeof s !== 'string') {
     return empty();
   }
@@ -48,7 +51,7 @@ export const regexStringVisitor = <T extends any>(
     }
     const sub = s.substr(previousLastIndex, match.index - previousLastIndex);
     if (sub) pieces.push(complete(sub));
-    pieces.push(onMatch(match));
+    pieces.push(onMatch(match, path));
     previousLastIndex = regex.lastIndex;
   }
   if (pieces.length === 0) {
@@ -63,8 +66,8 @@ export const regexStringVisitor = <T extends any>(
   }
 };
 
-const advance = (config: any) =>
-  recursiveMapper(() => (value: any) => {
+const advance = (config: unknown) =>
+  recursiveMapper(() => (value: unknown) => {
     if (!isSuspended(value)) {
       return { isPresent: false };
     } else {
@@ -81,10 +84,12 @@ const advance = (config: any) =>
     }
   })(config);
 
-const dependenciesOf: (config: any) => TDependenciesOf = recursiveMapperReducer(
+const dependenciesOf: (
+  config: unknown,
+) => TDependenciesOf = recursiveMapperReducer(
   () => ({}), // only invoked on non-suspended values
   (prev: TDependenciesOf, current: TDependenciesOf) => {
-    for (let identifier of Object.keys({ ...prev, ...current })) {
+    for (const identifier of Object.keys({ ...prev, ...current })) {
       const dependenciesArr: string[] = prev[identifier] || [];
       dependenciesArr.push(...(current[identifier] || []));
       prev[identifier] = dependenciesArr;
@@ -92,13 +97,13 @@ const dependenciesOf: (config: any) => TDependenciesOf = recursiveMapperReducer(
     return prev;
   },
   () => ({}),
-  (value: any) =>
+  (value: unknown) =>
     isSuspended(value)
       ? present({ [value.identifier]: value.dependencies })
       : empty(),
 );
 
-const advanceRepeatedly = (start: any): any => {
+const advanceRepeatedly = (start: unknown): unknown => {
   let next = start;
   for (let i = 0; i < 100; i++) {
     const dependencies = dependenciesOf(next);
@@ -115,34 +120,47 @@ const advanceRepeatedly = (start: any): any => {
   );
 };
 
-export const DOLLAR_SIGN_BRACKET_REFERENCE = regexStringVisitor(
-  /\${([^}]+)}/g,
-  (match: RegExpExecArray) => {
-    if (match[1] === undefined || match[0] === undefined) {
-      throw new Error('Regex must have a value at group 1. Result is ' + match);
-    }
-    const recordLookupFn = recordLookup(match[1].split('.'));
-    return suspendedRecordLookupFn(recordLookupFn, match[0], []);
-  },
-);
+export interface IRecordLookupFn {
+  expression: string;
+  lookup: (a: unknown) => IRecordLookupResult;
+}
 
-const suspendedRecordLookupFn = (
-  recordLookupFn: (a: any) => IRecordLookupResult,
-  suspendedFnStringValue: string,
+export const basicRecordLookupFnFactory = (
+  match: RegExpExecArray,
+): IRecordLookupFn => {
+  if (match[1] === undefined || match[0] === undefined) {
+    throw new Error('Regex must have a value at group 1. Result is ' + match);
+  }
+  return {
+    expression: match[0],
+    lookup: recordLookup(match[1].split('.')),
+  };
+};
+
+export const DOLLAR_SIGN_BRACKET_REFERENCE = (
+  recordLookupFnFactory: (match: RegExpExecArray) => IRecordLookupFn,
+): TPathFn<unknown, Optional<IMaybeSuspended<unknown>>> =>
+  regexStringVisitor(/\${([^}]+)}/g, (match: RegExpExecArray) =>
+    suspendedRecordLookupFn(recordLookupFnFactory(match), []),
+  );
+
+export const suspendedRecordLookupFn = (
+  recordLookupFn: IRecordLookupFn,
   dependencies: string[],
-): IMaybeSuspended<any> =>
-  suspend(
-    suspendedFnStringValue,
+): IMaybeSuspended<unknown> => {
+  const { expression, lookup } = recordLookupFn;
+  return suspend(
+    expression,
     (evaluationContext) => {
-      const { resolvedPath, unresolvedPath, value, values } = recordLookupFn(
+      const { resolvedPath, unresolvedPath, value, values } = lookup(
         evaluationContext,
       );
 
-      const dependedOn = [...values, value].find((val: any): boolean =>
+      const dependedOn = [...values, value].find((val: unknown): boolean =>
         isSuspended(val),
       );
       if (dependedOn !== undefined) {
-        return suspendedRecordLookupFn(recordLookupFn, suspendedFnStringValue, [
+        return suspendedRecordLookupFn(recordLookupFn, [
           ...dependencies,
           dependedOn.identifier,
         ]);
@@ -150,18 +168,19 @@ const suspendedRecordLookupFn = (
         return value;
       } else
         throw new Error(
-          `Expression ${suspendedFnStringValue} evaluated with unresolved path [${unresolvedPath}], resolved path [${resolvedPath}], and value: ${value}`,
+          `Expression ${expression} evaluated with unresolved path [${unresolvedPath}], resolved path [${resolvedPath}], and value: ${value}`,
         );
     },
     dependencies,
   );
+};
 
 export const expander = <T>(
-  mapper: (a: any, path: TPath) => Optional<IMaybeSuspended<T>>,
-) => {
+  mapper: (a: unknown, path: TPath) => Optional<IMaybeSuspended<T>>,
+): ((baseConfig: unknown) => unknown) => {
   const initialExpander = recursiveMapper(() => mapper);
-  return (baseConfig: any) => {
-    let expanded = initialExpander(baseConfig);
+  return (baseConfig: unknown) => {
+    const expanded = initialExpander(baseConfig);
     return advanceRepeatedly(expanded);
   };
 };
