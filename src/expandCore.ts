@@ -127,13 +127,17 @@ export interface IRecordLookupFn {
 
 export const basicRecordLookupFnFactory = (
   match: RegExpExecArray,
+  valueKeyFn: (value: unknown, key: number | string) => unknown = (
+    value,
+    key,
+  ) => (value as any)[key],
 ): IRecordLookupFn => {
   if (match[1] === undefined || match[0] === undefined) {
     throw new Error('Regex must have a value at group 1. Result is ' + match);
   }
   return {
     expression: match[0],
-    lookup: recordLookup(match[1].split('.')),
+    lookup: recordLookup(match[1].split('.'), valueKeyFn),
   };
 };
 

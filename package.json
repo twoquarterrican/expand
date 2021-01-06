@@ -20,7 +20,7 @@
     "test": "jest --coverage",
     "prepare": "npm run compile",
     "prepublishOnly": "npm test && npm run lint",
-    "preversion": "npm run lint",
+    "preversion": "npm test && npm run lint",
     "version": "git add -A src",
     "postversion": "git push && git push --tags"
   },
@@ -35,7 +35,7 @@
   },
   "devDependencies": {
     "@types/jest": "^26.0.19",
-    "@types/node": "^14.14.14",
+    "@types/node": "^14.14.20",
     "@typescript-eslint/eslint-plugin": "^4.12.0",
     "@typescript-eslint/parser": "^4.12.0",
     "eslint": "^7.17.0",
@@ -55,6 +55,6 @@
     "trailingComma": "all"
   },
   "dependencies": {
-    "recursive-reducer": "0.0.5"
+    "recursive-reducer": "0.0.7"
   }
 }

@@ -14,7 +14,7 @@ test('chains of dependencies in dollar sign bracket references', async () => {
     await dollarSignBracketExpander({
       key1: '1',
       key2: '${key1}',
-      key3: '${key1}${key2}',
+      key3: '---${key1}${key2}',
       key4: [
         'here is key4[1][key5]: ${key4.1.key5}',
         {
@@ -29,12 +29,12 @@ test('chains of dependencies in dollar sign bracket references', async () => {
   ).toStrictEqual({
     key1: '1',
     key2: '1',
-    key3: '11',
+    key3: '---11',
     key4: [
-      'here is key4[1][key5]: here is key3: 11',
+      'here is key4[1][key5]: here is key3: ---11',
       {
-        key5: 'here is key3: 11',
-        key6: 'here is key4[0]: here is key4[1][key5]: here is key3: 11',
+        key5: 'here is key3: ---11',
+        key6: 'here is key4[0]: here is key4[1][key5]: here is key3: ---11',
       },
     ],
     key7: 'value9',
