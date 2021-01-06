@@ -1,6 +1,6 @@
 {
   "name": "@twoquarterrican/expand",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Recursively expand values",
   "main": "lib/index.js",
   "module": "lib/index.es5.js",
