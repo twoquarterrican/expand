@@ -1,9 +1,11 @@
 import {
   basicRecordLookupFnFactory,
+  combineMaybeSuspenders,
   DOLLAR_SIGN_BRACKET_REFERENCE,
   expander,
 } from './expandCore';
 import * as util from 'util';
+import { empty, present, TPath } from 'recursive-reducer';
 
 const dollarSignBracketExpander = expander(
   DOLLAR_SIGN_BRACKET_REFERENCE(basicRecordLookupFnFactory),
@@ -71,4 +73,18 @@ test('invalid expression', () => {
       'Error: Expression ${key2.a.b} evaluated with unresolved path [b], resolved path [key2,a], and value: undefined',
     );
   }
+});
+
+test('combine maybe suspenders', () => {
+  const mapper1 = (a: unknown) =>
+    typeof a === 'number' ? present(a * 10) : empty();
+  const mapper2 = (a: unknown) =>
+    typeof a === 'string' ? present(-1) : empty();
+  const mapper3 = (_a: unknown, path: TPath) =>
+    path.length > 1 ? present(path[0]) : empty();
+  const combined = combineMaybeSuspenders(mapper1, mapper2, mapper3);
+  expect(combined(3, []).value).toBe(30);
+  expect(combined('3', []).value).toBe(-1);
+  expect(combined([3], []).isPresent).toBe(false);
+  expect(combined([3], ['-', '']).value).toBe('-');
 });

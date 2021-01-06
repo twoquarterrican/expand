@@ -179,10 +179,33 @@ export const suspendedRecordLookupFn = (
   );
 };
 
+export type TMaybeSuspender<T> = (
+  a: unknown,
+  path: TPath,
+) => Optional<IMaybeSuspended<T>>;
+
+/**
+ * Combine many maybeSuspenders into a single maybeSuspender.
+ * @param maybeSuspenders zero or more maybeSuspenders (take in any value and a path, return optional suspended value)
+ */
+export const combineMaybeSuspenders = <T>(
+  ...maybeSuspenders: TMaybeSuspender<T>[]
+): TMaybeSuspender<T> => {
+  return (a: unknown, path: TPath): Optional<IMaybeSuspended<T>> => {
+    for (const mapper of maybeSuspenders) {
+      const optional = mapper(a, path);
+      if (optional.isPresent) {
+        return optional;
+      }
+    }
+    return empty();
+  };
+};
+
 export const expander = <T>(
-  mapper: (a: unknown, path: TPath) => Optional<IMaybeSuspended<T>>,
+  maybeSuspender: TMaybeSuspender<T>,
 ): ((baseConfig: unknown) => unknown) => {
-  const initialExpander = recursiveMapper(() => mapper);
+  const initialExpander = recursiveMapper(() => maybeSuspender);
   return (baseConfig: unknown) => {
     const expanded = initialExpander(baseConfig);
     return advanceRepeatedly(expanded);
