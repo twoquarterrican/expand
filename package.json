@@ -55,6 +55,6 @@
     "trailingComma": "all"
   },
   "dependencies": {
-    "recursive-reducer": "0.0.8"
+    "recursive-reducer": "0.0.10"
   }
 }

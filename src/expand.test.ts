@@ -3,9 +3,10 @@ import {
   combineMaybeSuspenders,
   DOLLAR_SIGN_BRACKET_REFERENCE,
   expander,
-} from './expandCore';
+} from './expand';
 import * as util from 'util';
 import { empty, present, TPath } from 'recursive-reducer';
+import { suspend } from './suspendable';
 
 const dollarSignBracketExpander = expander(
   DOLLAR_SIGN_BRACKET_REFERENCE(basicRecordLookupFnFactory),
@@ -87,4 +88,23 @@ test('combine maybe suspenders', () => {
   expect(combined('3', []).value).toBe(-1);
   expect(combined([3], []).isPresent).toBe(false);
   expect(combined([3], ['-', '']).value).toBe('-');
+});
+
+test('async suspended', async () => {
+  const asyncExpander = expander((a: any, path: TPath) =>
+    typeof a === 'number'
+      ? present(
+          suspend(
+            path.join(','),
+            () =>
+              new Promise((resolve) => {
+                setTimeout(() => resolve(a * 10), 100);
+              }),
+          ),
+        )
+      : empty(),
+  );
+  expect(
+    await Promise.all(asyncExpander([1, 'a', 2, 'b']) as Promise<any>[]),
+  ).toStrictEqual([10, 'a', 20, 'b']);
 });

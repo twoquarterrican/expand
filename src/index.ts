@@ -4,4 +4,5 @@ export {
   DOLLAR_SIGN_BRACKET_REFERENCE,
   expander,
   regexStringVisitor,
-} from './expandCore';
+} from './expand';
+export { isSuspended, suspend } from './suspendable';
